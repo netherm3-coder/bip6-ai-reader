@@ -1,0 +1,120 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Щоденна перезбірка: preview-пакет має позначку часу, тож тримаємо його свіжим.
+  schedule:
+    - cron: '23 3 * * *'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    name: Програма для годинника
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Zeus CLI
+        run: npm install -g @zeppos/zeus-cli@1
+
+      # Звичайна збірка перевіряє проєкт і завантажує список пристроїв Zepp.
+      - name: Build
+        run: zeus build
+
+      # Сканер «Режиму розробника» в Zepp приймає лише preview-пакети.
+      - name: Build preview package
+        run: node .tools/build-preview.js
+
+      - name: Extract the Bip 6 package
+        run: |
+          set -euo pipefail
+          ls -la dist
+          ZAB="$(ls dist/*.zab | head -n1)"
+          test -n "$ZAB"
+          mkdir -p out unpacked
+          cp "$ZAB" out/bip6-ai-reader.zab
+          unzip -o "$ZAB" -d unpacked
+          ZPK="$(find unpacked -name '*.zpk' | head -n1)"
+          test -n "$ZPK"
+          cp "$ZPK" out/bip6-ai-reader.zpk
+          unzip -l out/bip6-ai-reader.zpk
+          unzip -p out/bip6-ai-reader.zpk device.zip > device.zip
+          unzip -l device.zip
+          unzip -p out/bip6-ai-reader.zpk app-side.zip > app-side.zip
+          unzip -l app-side.zip
+          unzip -p device.zip app.json > app.json
+          cat app.json; echo
+          grep -q '"mode":"preview"' app.json
+
+      - name: Publish to the build branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd out
+          echo "zpkd1://raw.githubusercontent.com/${GITHUB_REPOSITORY}/build/bip6-ai-reader.zpk" > install-link.txt
+          git init -q -b build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Build from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" build
+
+  pages:
+    name: Сторінка «На годинник»
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that GitHub Pages is enabled
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          code=$(curl -s -o pages.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")
+          if [ "$code" = "200" ] && grep -q '"build_type": *"workflow"' pages.json; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GitHub Pages ще не ввімкнено: Settings → Pages → Source: GitHub Actions, потім запусти цей workflow ще раз."
+          fi
+
+      - name: Prepare site
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          mkdir -p _site
+          cp -r .pwa/. _site/
+
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.enabled == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          path: _site
+
+      - id: deploy
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v4

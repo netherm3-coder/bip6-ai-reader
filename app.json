@@ -1,0 +1,54 @@
+{
+  "configVersion": "v3",
+  "app": {
+    "appId": 9561412,
+    "appName": "AI Читалка",
+    "appType": "app",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png",
+    "vender": "netherm3",
+    "description": "Відповіді Claude і Gemini з телефона — на годиннику"
+  },
+  "permissions": ["data:os.device.info", "device:os.local_storage"],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "4.0",
+      "target": "4.0",
+      "minVersion": "4.0"
+    }
+  },
+  "debug": false,
+  "targets": {
+    "default": {
+      "module": {
+        "page": {
+          "pages": ["page/index", "page/view"]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        },
+        "setting": {
+          "path": "setting/index"
+        }
+      },
+      "platforms": [
+        { "name": "bip6-cn", "deviceSource": 9765120, "dw": 390 },
+        { "name": "bip6", "deviceSource": 9765121, "dw": 390 },
+        { "name": "bip6-b", "deviceSource": 10158337, "dw": 390 }
+      ],
+      "designWidth": 390
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "AI Читалка"
+    },
+    "uk-UA": {
+      "appName": "AI Читалка"
+    }
+  },
+  "defaultLanguage": "en-US"
+}

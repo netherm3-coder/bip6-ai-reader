@@ -1,0 +1,12 @@
+{
+  "name": "bip6-ai-reader",
+  "version": "1.0.0",
+  "description": "Відповіді Claude і Gemini з телефона — на годиннику Amazfit Bip 6",
+  "private": true,
+  "scripts": {
+    "build": "zeus build"
+  },
+  "dependencies": {
+    "@zeppos/zml": "0.0.43"
+  }
+}

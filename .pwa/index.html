@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>На годинник</title>
+<meta name="description" content="Відповіді Claude і Gemini — на годинник Amazfit Bip 6">
+<meta name="theme-color" content="#0b0b0d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #0b0b0d;
+    --card: #1a1a1d;
+    --card-2: #242428;
+    --line: #2c2c31;
+    --text: #f2f2f5;
+    --muted: #9a9aa3;
+    --accent: #2f7ff5;
+    --accent-press: #1f62c8;
+    --ok: #34c759;
+    --warn: #ff9f0a;
+    --bad: #ff453a;
+    --claude: #d97757;
+    --gemini: #6c8cff;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+    max-width: 560px; margin: 0 auto;
+  }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 26px 4px 10px; text-transform: none; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; }
+  a { color: #7fb0ff; }
+
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .status { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 14px; color: var(--muted); background: none; padding: 0; text-align: left; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .icon-btn { width: 44px; height: 44px; border-radius: 14px; background: var(--card); display: grid; place-items: center; flex: none; }
+  .icon-btn svg { width: 22px; height: 22px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); padding: 5px; border-radius: 16px; margin-top: 22px; }
+  .seg button { height: 46px; border-radius: 12px; background: transparent; color: var(--muted); font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .seg button[aria-pressed="true"] { background: var(--card-2); color: var(--text); }
+  .seg .src-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .c-claude { background: var(--claude); } .c-gemini { background: var(--gemini); }
+
+  .primary { width: 100%; height: 66px; margin-top: 12px; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 19px; font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .primary:active { background: var(--accent-press); }
+  .primary:disabled { opacity: .55; }
+  .primary svg { width: 24px; height: 24px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 10px 4px 0; }
+
+  .result { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
+  .result.ok { border-color: rgba(52,199,89,.45); }
+  .result.err { border-color: rgba(255,69,58,.5); }
+  .result .r-head { font-weight: 650; }
+  .result .r-title { color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+  .result .r-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .chip { height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card-2); font-weight: 600; font-size: 15px; }
+  .chip.danger { color: #ff8a80; }
+
+  details { margin-top: 14px; background: var(--card); border-radius: var(--radius); }
+  summary { list-style: none; padding: 15px 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▾"; color: var(--muted); }
+  details[open] summary::after { content: "▴"; }
+  .details-body { padding: 0 16px 16px; }
+  textarea, input[type=text], input[type=password] {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; outline: none;
+  }
+  textarea { min-height: 150px; resize: vertical; }
+  textarea:focus, input:focus { border-color: var(--accent); }
+  .secondary { width: 100%; height: 50px; margin-top: 10px; border-radius: 14px; background: var(--card-2); font-weight: 650; }
+
+  .list { background: var(--card); border-radius: var(--radius); overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 13px 8px 13px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row .src-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .row .r-main { flex: 1; min-width: 0; }
+  .row .r-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .r-s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .row .del { width: 40px; height: 40px; border-radius: 12px; background: transparent; color: var(--muted); display: grid; place-items: center; flex: none; }
+  .row .del svg { width: 18px; height: 18px; }
+  .empty { padding: 18px 16px; color: var(--muted); }
+
+  .settings { margin-top: 18px; background: var(--card); border-radius: var(--radius); padding: 16px; }
+  .settings h3 { margin: 0 0 12px; font-size: 18px; }
+  .field { margin-top: 14px; }
+  .field label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  .field .with-btn { display: flex; gap: 8px; }
+  .field .with-btn input { flex: 1; min-width: 0; }
+  .field .with-btn button { width: 50px; border-radius: 12px; background: var(--card-2); flex: none; }
+  .note { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .msg { margin-top: 12px; font-size: 15px; }
+  .msg.ok { color: var(--ok); } .msg.bad { color: #ff8a80; } .msg.warn { color: var(--warn); }
+  ol { padding-left: 20px; margin: 8px 0 0; }
+  ol li { margin: 6px 0; }
+  .hidden { display: none !important; }
+  .spin { width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); border-top-color: #fff; animation: s 0.8s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>На годинник</h1>
+    <button class="status" id="status" type="button"><span class="dot" id="statusDot"></span><span id="statusText">Перевірка…</span></button>
+  </div>
+  <button class="icon-btn" id="openSettings" type="button" aria-label="Налаштування">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </button>
+</header>
+
+<section id="settings" class="settings hidden" aria-label="Налаштування">
+  <h3>Налаштування</h3>
+  <div class="field">
+    <label for="token">Токен GitHub</label>
+    <div class="with-btn">
+      <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
+      <button type="button" id="toggleToken" aria-label="Показати токен">👁</button>
+    </div>
+    <p class="note">Немає токена? <a id="tokenLink" target="_blank" rel="noopener">Створити на GitHub</a> — у «Repository access» вибери <b>Only select repositories → bip6-ai-inbox</b>, далі Generate token і скопіюй.</p>
+  </div>
+  <div class="field">
+    <label for="repo">Приватний репозиторій для відповідей</label>
+    <input id="repo" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <button class="primary" id="saveSettings" type="button">Зберегти й перевірити</button>
+  <div class="msg" id="settingsMsg"></div>
+</section>
+
+<main id="main">
+  <div class="seg" role="group" aria-label="Звідки відповідь">
+    <button type="button" data-src="claude" aria-pressed="true"><span class="src-dot c-claude"></span>Claude</button>
+    <button type="button" data-src="gemini" aria-pressed="false"><span class="src-dot c-gemini"></span>Gemini</button>
+  </div>
+
+  <button class="primary" id="paste" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+    <span id="pasteLabel">Вставити з буфера</span>
+  </button>
+  <p class="hint">У Claude чи Gemini натисни «Копіювати» під відповіддю, потім — цю кнопку. Або виділи текст → «Поділитися» → «На годинник».</p>
+
+  <div id="result" class="result hidden" role="status">
+    <div class="r-head" id="resultHead"></div>
+    <div class="r-title" id="resultTitle"></div>
+    <div class="r-actions" id="resultActions"></div>
+  </div>
+
+  <details id="manual">
+    <summary>Вставити вручну</summary>
+    <div class="details-body">
+      <textarea id="manualText" placeholder="Натисни й утримуй тут → «Вставити»"></textarea>
+      <button class="secondary" id="manualSend" type="button">Надіслати на годинник</button>
+    </div>
+  </details>
+
+  <h2 id="listTitle">На годиннику</h2>
+  <div class="list" id="list"><div class="empty">Завантаження…</div></div>
+
+  <details>
+    <summary>Як це працює</summary>
+    <div class="details-body">
+      <ol>
+        <li>Текст відповіді очищається від розмітки й зберігається у твоєму приватному репозиторії на GitHub.</li>
+        <li>Програма «AI Читалка» на годиннику забирає його через Zepp на телефоні.</li>
+        <li>Зберігаються останні 50 відповідей; старіші видаляються самі.</li>
+        <li>Фото й файли не передаються — лише текст.</li>
+      </ol>
+    </div>
+  </details>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
