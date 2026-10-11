@@ -1,17 +1,8 @@
 import * as hmUI from '@zos/ui'
-import { setPageBrightTime } from '@zos/display'
 
 export function statusBar(visible) {
   try {
     if (typeof hmUI.setStatusBarVisible === 'function') hmUI.setStatusBarVisible(visible)
-  } catch (e) {}
-}
-
-// Час світіння екрана для поточної сторінки (відлік від останнього дотику).
-// Коли сторінка закривається, система сама повертає звичайний час.
-export function keepScreenOn(ms) {
-  try {
-    setPageBrightTime({ brightTime: ms })
   } catch (e) {}
 }
 

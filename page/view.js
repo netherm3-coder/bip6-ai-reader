@@ -6,8 +6,9 @@ import { getDeviceInfo } from '@zos/device'
 import { BasePage } from '@zeppos/zml/base-page'
 import { loadIndex, readText, writeText, markSeen } from '../utils/cache'
 import { formatStamp } from '../utils/time'
-import { COLOR, SOURCE_COLOR, STATUS_BAR_H, MAX_SHOWN, SCREEN_ON_MS } from '../utils/constants'
-import { statusBar, keepScreenOn, parseParams, textHeight, splitChunks, setProps } from '../utils/ui'
+import { COLOR, SOURCE_COLOR, STATUS_BAR_H, MAX_SHOWN } from '../utils/constants'
+import { statusBar, parseParams, textHeight, splitChunks, setProps } from '../utils/ui'
+import { holdScreen, refreshScreen, releaseScreen } from '../utils/screen'
 import { errorMessage, bleCode } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
 
@@ -32,7 +33,7 @@ Page(
       const { width: W } = getDeviceInfo()
       this.W = W
       statusBar(true)
-      keepScreenOn(SCREEN_ON_MS)
+      holdScreen()
 
       const textW = W - PAD_X * 2
       let y = STATUS_BAR_H + 6
@@ -212,8 +213,13 @@ Page(
         })
     },
 
+    onResume() {
+      refreshScreen()
+    },
+
     onDestroy() {
       this.destroyed = true
+      releaseScreen()
     }
   })
 )

@@ -55,22 +55,23 @@
   .primary { width: 100%; height: 66px; margin-top: 12px; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 19px; font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 10px; }
   .primary:active { background: var(--accent-press); }
   .primary:disabled { opacity: .55; }
+  .primary svg { width: 24px; height: 24px; }
   .hint { color: var(--muted); font-size: 14px; margin: 10px 4px 0; }
+  .clip-note { color: var(--warn); font-size: 14px; margin: 10px 4px 0; }
 
-  /* Поле для вставки: утримати → «Вставити». Дозволу на буфер не потребує. */
+  /* Запасний шлях: утримати поле → «Вставити». Дозволу на буфер не потребує. */
   .paste-zone { position: relative; margin-top: 12px; }
   .paste-zone textarea {
-    display: block; width: 100%; min-height: 156px; resize: none;
+    display: block; width: 100%; min-height: 92px; resize: none;
     background: var(--card); border: 2px dashed #3d3d45; border-radius: var(--radius);
     padding: 14px 16px; font-size: 15px; line-height: 1.4;
   }
   .paste-zone textarea:focus { border-style: solid; border-color: var(--accent); }
   .pz-hint {
-    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 3px; padding: 16px; text-align: center; color: var(--muted); pointer-events: none;
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 12px 16px; text-align: center; color: var(--muted); font-size: 15px; pointer-events: none;
   }
-  .pz-hint svg { width: 30px; height: 30px; color: var(--accent); margin-bottom: 6px; }
-  .pz-hint b { color: var(--text); font-size: 19px; font-weight: 650; }
+  .pz-hint b { color: var(--text); font-weight: 600; }
   .paste-zone textarea:not(:placeholder-shown) + .pz-hint { display: none; }
   .paste-zone.busy textarea { opacity: .55; }
   .pz-actions { display: flex; gap: 8px; margin-top: 10px; }
@@ -85,7 +86,7 @@
     content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 9px; vertical-align: -2px;
     border-radius: 50%; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; animation: s .8s linear infinite;
   }
-  .result .r-title { color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+  .result .r-title { color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; white-space: pre-line; }
   .result .r-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .chip { height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card-2); font-weight: 600; font-size: 15px; }
   .chip.danger { color: #ff8a80; }
@@ -165,13 +166,15 @@
     <button type="button" data-src="gemini" aria-pressed="false"><span class="src-dot c-gemini"></span>Gemini</button>
   </div>
 
+  <button class="primary" id="paste" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+    <span id="pasteLabel">Вставити й надіслати</span>
+  </button>
+  <p class="clip-note hidden" id="clipNote" role="note"></p>
+
   <div class="paste-zone" id="pasteZone">
-    <textarea id="pasteBox" placeholder=" " aria-label="Встав відповідь сюди" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
-    <div class="pz-hint" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-      <b>Натисни й утримуй тут</b>
-      <span>→ «Вставити». Текст одразу піде на годинник.</span>
-    </div>
+    <textarea id="pasteBox" placeholder=" " aria-label="Або встав відповідь сюди" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <div class="pz-hint" aria-hidden="true"><span>Або <b>натисни й утримуй тут</b> → «Вставити»</span></div>
   </div>
   <div class="pz-actions hidden" id="boxActions">
     <button class="primary" id="boxSend" type="button">Надіслати на годинник</button>

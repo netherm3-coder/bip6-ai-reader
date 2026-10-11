@@ -7,8 +7,9 @@ import { getDeviceInfo } from '@zos/device'
 import { BasePage } from '@zeppos/zml/base-page'
 import { loadIndex, syncItems, hasText, writeText } from '../utils/cache'
 import { formatStamp } from '../utils/time'
-import { COLOR, SOURCE_COLOR, STATUS_BAR_H, PREFETCH, SCREEN_ON_MS } from '../utils/constants'
-import { statusBar, keepScreenOn, setProps, removeWidget } from '../utils/ui'
+import { COLOR, SOURCE_COLOR, STATUS_BAR_H, PREFETCH } from '../utils/constants'
+import { statusBar, setProps, removeWidget } from '../utils/ui'
+import { holdScreen, refreshScreen, releaseScreen } from '../utils/screen'
 import { errorMessage, bleCode } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
 
@@ -40,7 +41,7 @@ Page(
       const { width: W } = getDeviceInfo()
       this.W = W
       statusBar(true)
-      keepScreenOn(SCREEN_ON_MS)
+      holdScreen()
 
       let y = STATUS_BAR_H + 6
       hmUI.createWidget(hmUI.widget.BUTTON, {
@@ -238,8 +239,13 @@ Page(
       next()
     },
 
+    onResume() {
+      refreshScreen()
+    },
+
     onDestroy() {
       this.destroyed = true
+      releaseScreen()
     }
   })
 )

@@ -66,8 +66,8 @@ const state = {
   items: [],
   check: null, // { ok, code, name }
   busy: false,
-  last: null, // { text, at }
-  repeatArmed: false,
+  last: null, // останнє надіслане: { text, at, id, title }
+  reading: false, // чекаємо на буфер (можливо, на запит дозволу)
   boxPrev: '' // вміст поля до останньої зміни
 }
 
@@ -210,6 +210,7 @@ async function removeItem(item) {
   try {
     state.items = await client().remove(item.id)
     renderList()
+    forgetLast(item.id)
     if (state.lastEntry && state.lastEntry.id === item.id) hideResult()
   } catch (e) {
     showResult('err', 'Не вдалося видалити', errText(e))
@@ -266,6 +267,7 @@ async function undo(entry) {
   try {
     state.items = await client().remove(entry.id)
     renderList()
+    forgetLast(entry.id)
     showResult('ok', 'Скасовано', '«' + entry.title + '» прибрано з годинника')
   } catch (e) {
     showResult('err', 'Не вдалося скасувати', errText(e))
@@ -278,8 +280,15 @@ async function undo(entry) {
 
 function setBusy(on) {
   state.busy = on
+  $('paste').disabled = on
   $('boxSend').disabled = on
+  $('pasteLabel').textContent = on ? 'Надсилаю…' : 'Вставити й надіслати'
   $('pasteZone').classList.toggle('busy', on)
+}
+
+// Видалене з годинника можна надіслати знову одразу.
+function forgetLast(id) {
+  if (state.last && state.last.id === id) state.last = null
 }
 
 async function send(raw, hint) {
@@ -300,12 +309,11 @@ async function send(raw, hint) {
     return false
   }
   const now = Date.now()
-  if (state.last && state.last.text === text && now - state.last.at < 90000 && !state.repeatArmed) {
-    state.repeatArmed = true
-    showResult('err', 'Цей текст уже надіслано щойно', 'Щоб надіслати ще раз — натисни «Надіслати на годинник».')
-    return false
+  // Той самий текст щойно пішов (подвійний дотик, у буфері ще стара відповідь) — не дублюємо.
+  if (state.last && state.last.text === text && now - state.last.at < 90000) {
+    showResult('ok', '✓ Уже на годиннику', '«' + state.last.title + '» надіслано щойно. Скопіюй нову відповідь.')
+    return true
   }
-  state.repeatArmed = false
 
   setBusy(true)
   showResult('busy', 'Надсилаю на годинник…', '')
@@ -321,7 +329,7 @@ async function send(raw, hint) {
     const src = hint || detectSource(source) || state.src
     const { entry, items } = await client().add({ text, src, title: makeTitle(text) })
     state.items = items
-    state.last = { text, at: now }
+    state.last = { text, at: now, id: entry.id, title: entry.title }
     renderList()
     showSent(entry)
     session.set('pending', null)
@@ -335,9 +343,106 @@ async function send(raw, hint) {
   }
 }
 
+// ---------- кнопка «Вставити й надіслати» ----------
+// Один дотик: читає буфер і одразу надсилає, без підтверджень. Читати буфер
+// браузер дає лише з дозволу: Chrome питає його один раз і далі пам'ятає.
+// Без дозволу лишається поле нижче (утримати → «Вставити»).
+
+const CLIP_HELP = {
+  denied: {
+    head: 'Браузер заблокував буфер для цієї сторінки',
+    body:
+      'Увімкни: значок ліворуч від адреси → «Дозволи» → «Буфер обміну» → «Дозволити».\n' +
+      'Якщо там такого немає: Chrome ⋮ → Налаштування → Налаштування сайтів → Буфер обміну → дозволь запити й прибери цей сайт із заблокованих.\n' +
+      'Потім натисни кнопку ще раз.'
+  },
+  inapp: {
+    head: 'Тут буфер недоступний',
+    body: 'Сторінку відкрито всередині іншої програми. Відкрий її в Chrome: ⋮ → «Відкрити в Chrome». Там браузер один раз спитає дозвіл.'
+  },
+  noprompt: {
+    head: 'Браузер не спитав дозволу на буфер',
+    body:
+      'Якщо сторінку відкрито з іншої програми (Claude, Telegram…), відкрий її в самому Chrome: ⋮ → «Відкрити в Chrome».\n' +
+      'Якщо вже в Chrome: ⋮ → Налаштування → Налаштування сайтів → Буфер обміну → дозволь запити й прибери цей сайт із заблокованих.'
+  }
+}
+const CLIP_FALLBACK = 'Поки що: утримуй пунктирне поле → «Вставити».'
+
+function canReadClipboard() {
+  return !!(navigator.clipboard && navigator.clipboard.readText)
+}
+
+// Вбудований браузер іншої програми (WebView): там буфер не читається взагалі.
+function inAppBrowser() {
+  return /; wv\)|FBAN|FBAV|Instagram|Telegram/i.test(navigator.userAgent || '')
+}
+
+async function clipPermission() {
+  try {
+    return await navigator.permissions.query({ name: 'clipboard-read' })
+  } catch (e) {
+    return null
+  }
+}
+
+async function showClipHelp() {
+  let kind = 'noprompt'
+  if (!canReadClipboard() || inAppBrowser()) kind = 'inapp'
+  else {
+    const perm = await clipPermission()
+    if (perm && perm.state === 'denied') kind = 'denied'
+  }
+  showResult('err', CLIP_HELP[kind].head, CLIP_HELP[kind].body + '\n' + CLIP_FALLBACK)
+  $('clipNote').classList.add('hidden') // кроки вже в повідомленні
+}
+
+async function pasteAndSend() {
+  if (state.busy || state.reading) return
+  if (!canReadClipboard()) {
+    showClipHelp()
+    return
+  }
+  let text = ''
+  state.reading = true
+  try {
+    text = await navigator.clipboard.readText() // перший раз Chrome питає дозвіл
+  } catch (e) {
+    showClipHelp()
+    return
+  } finally {
+    state.reading = false
+  }
+  if (!hasText(text)) {
+    showResult('err', 'Буфер порожній', 'Спершу натисни «Копіювати» під відповіддю в Claude чи Gemini.')
+    return
+  }
+  await send(text)
+}
+
+// Попередження одразу, якщо кнопка точно не спрацює.
+async function watchClipPermission() {
+  const note = $('clipNote')
+  const show = (text) => {
+    note.textContent = text
+    note.classList.toggle('hidden', !text)
+  }
+  if (!canReadClipboard() || inAppBrowser()) {
+    show('⚠ Тут буфер недоступний, кнопка не спрацює. Відкрий сторінку в Chrome: ⋮ → «Відкрити в Chrome».')
+    return
+  }
+  const perm = await clipPermission()
+  if (!perm) return
+  const render = () =>
+    show(perm.state === 'denied' ? '⚠ Браузер заблокував буфер, кнопка не спрацює. Натисни її — покажу, як увімкнути.' : '')
+  render()
+  try {
+    perm.addEventListener('change', render)
+  } catch (e) {}
+}
+
 // ---------- поле для вставки ----------
-// Прочитати буфер сама сторінка може лише з дозволу, а Chrome на Android його
-// не завжди питає. Тож вставляє користувач: утримати поле → «Вставити» (або
+// Запасний шлях без дозволу на буфер: утримати поле → «Вставити» (або
 // торкнутися скопійованого тексту над клавіатурою). Вставлене йде одразу.
 
 const PASTE_MIN = 25 // стільки символів за один раз — це вставка, а не набір
@@ -493,6 +598,8 @@ function init() {
     input.type = input.type === 'password' ? 'text' : 'password'
   })
   $('saveSettings').addEventListener('click', saveSettings)
+  $('paste').addEventListener('click', pasteAndSend)
+  watchClipPermission()
   const box = $('pasteBox')
   box.addEventListener('paste', onBoxPaste)
   box.addEventListener('input', onBoxInput)

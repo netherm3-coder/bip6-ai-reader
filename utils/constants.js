@@ -32,5 +32,5 @@ export const MAX_SHOWN = 12000
 export const PREFETCH = 3
 
 // Поки програма відкрита, екран не гасне сам. Запобіжник для батареї:
-// згасне після 10 хв без жодного дотику.
-export const SCREEN_ON_MS = 10 * 60 * 1000
+// згасне після 20 хв без жодного дотику.
+export const SCREEN_ON_MS = 20 * 60 * 1000
