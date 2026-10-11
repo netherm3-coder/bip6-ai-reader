@@ -67,7 +67,8 @@ const state = {
   check: null, // { ok, code, name }
   busy: false,
   last: null, // { text, at }
-  repeatArmed: false
+  repeatArmed: false,
+  boxPrev: '' // вміст поля до останньої зміни
 }
 
 const $ = (id) => document.getElementById(id)
@@ -277,10 +278,8 @@ async function undo(entry) {
 
 function setBusy(on) {
   state.busy = on
-  const btn = $('paste')
-  btn.disabled = on
-  $('manualSend').disabled = on
-  $('pasteLabel').textContent = on ? 'Надсилаю…' : 'Вставити з буфера'
+  $('boxSend').disabled = on
+  $('pasteZone').classList.toggle('busy', on)
 }
 
 async function send(raw, hint) {
@@ -303,12 +302,13 @@ async function send(raw, hint) {
   const now = Date.now()
   if (state.last && state.last.text === text && now - state.last.at < 90000 && !state.repeatArmed) {
     state.repeatArmed = true
-    showResult('err', 'Цей текст уже надіслано щойно', 'Натисни ще раз, якщо треба надіслати повторно.')
+    showResult('err', 'Цей текст уже надіслано щойно', 'Щоб надіслати ще раз — натисни «Надіслати на годинник».')
     return false
   }
   state.repeatArmed = false
 
   setBusy(true)
+  showResult('busy', 'Надсилаю на годинник…', '')
   try {
     if (!state.check || !state.check.ok) {
       const res = await checkConnection()
@@ -335,31 +335,59 @@ async function send(raw, hint) {
   }
 }
 
-async function pasteFromClipboard() {
-  if (state.busy) return
-  if (!navigator.clipboard || !navigator.clipboard.readText) {
-    openManual('Браузер не дає прочитати буфер — встав текст сюди.')
-    return
-  }
-  let text = ''
-  try {
-    text = await navigator.clipboard.readText()
-  } catch (e) {
-    openManual('Немає доступу до буфера. Дозволь його в запиті браузера або встав текст сюди.')
-    return
-  }
-  if (!text || !text.trim()) {
-    showResult('err', 'Буфер порожній', 'Спершу натисни «Копіювати» під відповіддю в Claude чи Gemini.')
-    return
-  }
-  await send(text)
+// ---------- поле для вставки ----------
+// Прочитати буфер сама сторінка може лише з дозволу, а Chrome на Android його
+// не завжди питає. Тож вставляє користувач: утримати поле → «Вставити» (або
+// торкнутися скопійованого тексту над клавіатурою). Вставлене йде одразу.
+
+const PASTE_MIN = 25 // стільки символів за один раз — це вставка, а не набір
+
+function hasText(s) {
+  return /\S/.test(s || '')
 }
 
-function openManual(message) {
-  const d = $('manual')
-  d.open = true
-  if (message) showResult('err', message, '')
-  setTimeout(() => $('manualText').focus(), 50)
+function updateBox() {
+  state.boxPrev = $('pasteBox').value
+  $('boxActions').classList.toggle('hidden', !hasText(state.boxPrev))
+}
+
+// Системне меню «Вставити»: беремо текст із події й замінюємо ним поле,
+// щоб він не дописався до старого.
+function onBoxPaste(e) {
+  const data = e.clipboardData
+  const text = data ? data.getData('text/plain') || data.getData('text') : ''
+  if (!hasText(text)) return // нехай браузер вставить сам, далі спрацює input
+  e.preventDefault()
+  $('pasteBox').value = text
+  submitBox()
+}
+
+// Вставка, яку не видно як paste: підказка клавіатури, перетягування.
+function onBoxInput(e) {
+  const prev = state.boxPrev || ''
+  const value = $('pasteBox').value
+  updateBox()
+  const type = e.inputType || ''
+  const jump = !hasText(prev) && value.length - prev.length >= PASTE_MIN && /\s/.test(value.trim())
+  if (type === 'insertFromPaste' || type === 'insertFromDrop' || jump) submitBox()
+}
+
+async function submitBox() {
+  const box = $('pasteBox')
+  const text = box.value
+  if (state.busy || !hasText(text)) {
+    updateBox()
+    return
+  }
+  box.blur() // ховає клавіатуру, щоб було видно результат
+  const ok = await send(text)
+  if (ok && box.value === text) box.value = ''
+  updateBox()
+}
+
+function clearBox() {
+  $('pasteBox').value = ''
+  updateBox()
 }
 
 function openRepoSettings() {
@@ -411,7 +439,8 @@ async function saveSettings() {
     if (pending) {
       try {
         const p = JSON.parse(pending)
-        await send(p.raw, p.hint)
+        const sent = await send(p.raw, p.hint)
+        if (sent && $('pasteBox').value === p.raw) clearBox()
       } catch (e) {}
     }
     setTimeout(closeSettings, 900)
@@ -464,11 +493,12 @@ function init() {
     input.type = input.type === 'password' ? 'text' : 'password'
   })
   $('saveSettings').addEventListener('click', saveSettings)
-  $('paste').addEventListener('click', pasteFromClipboard)
-  $('manualSend').addEventListener('click', async () => {
-    const ok = await send($('manualText').value)
-    if (ok) $('manualText').value = ''
-  })
+  const box = $('pasteBox')
+  box.addEventListener('paste', onBoxPaste)
+  box.addEventListener('input', onBoxInput)
+  $('boxSend').addEventListener('click', submitBox)
+  $('boxClear').addEventListener('click', clearBox)
+  updateBox()
   document.querySelectorAll('.seg button').forEach((b) =>
     b.addEventListener('click', () => {
       state.src = b.dataset.src === 'gemini' ? 'gemini' : 'claude'

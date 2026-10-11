@@ -1,7 +1,7 @@
 // Кешує оболонку сторінки, щоб вона відкривалася швидко й без мережі.
 // Запити до GitHub API не кешуються.
 
-const CACHE = 'na-hodynnyk-v1'
+const CACHE = 'na-hodynnyk-v2'
 const SHELL = ['./', 'index.html', 'app.js', 'clean.js', 'github.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']
 
 self.addEventListener('install', (event) => {

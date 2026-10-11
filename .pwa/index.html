@@ -55,13 +55,36 @@
   .primary { width: 100%; height: 66px; margin-top: 12px; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 19px; font-weight: 650; display: flex; align-items: center; justify-content: center; gap: 10px; }
   .primary:active { background: var(--accent-press); }
   .primary:disabled { opacity: .55; }
-  .primary svg { width: 24px; height: 24px; }
   .hint { color: var(--muted); font-size: 14px; margin: 10px 4px 0; }
+
+  /* Поле для вставки: утримати → «Вставити». Дозволу на буфер не потребує. */
+  .paste-zone { position: relative; margin-top: 12px; }
+  .paste-zone textarea {
+    display: block; width: 100%; min-height: 156px; resize: none;
+    background: var(--card); border: 2px dashed #3d3d45; border-radius: var(--radius);
+    padding: 14px 16px; font-size: 15px; line-height: 1.4;
+  }
+  .paste-zone textarea:focus { border-style: solid; border-color: var(--accent); }
+  .pz-hint {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 16px; text-align: center; color: var(--muted); pointer-events: none;
+  }
+  .pz-hint svg { width: 30px; height: 30px; color: var(--accent); margin-bottom: 6px; }
+  .pz-hint b { color: var(--text); font-size: 19px; font-weight: 650; }
+  .paste-zone textarea:not(:placeholder-shown) + .pz-hint { display: none; }
+  .paste-zone.busy textarea { opacity: .55; }
+  .pz-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .pz-actions .primary { flex: 1; margin-top: 0; height: 54px; font-size: 17px; }
+  .pz-actions .secondary { width: auto; margin-top: 0; height: 54px; padding: 0 18px; }
 
   .result { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); }
   .result.ok { border-color: rgba(52,199,89,.45); }
   .result.err { border-color: rgba(255,69,58,.5); }
   .result .r-head { font-weight: 650; }
+  .result.busy .r-head::before {
+    content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 9px; vertical-align: -2px;
+    border-radius: 50%; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; animation: s .8s linear infinite;
+  }
   .result .r-title { color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
   .result .r-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .chip { height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card-2); font-weight: 600; font-size: 15px; }
@@ -104,7 +127,6 @@
   ol { padding-left: 20px; margin: 8px 0 0; }
   ol li { margin: 6px 0; }
   .hidden { display: none !important; }
-  .spin { width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); border-top-color: #fff; animation: s 0.8s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -143,25 +165,25 @@
     <button type="button" data-src="gemini" aria-pressed="false"><span class="src-dot c-gemini"></span>Gemini</button>
   </div>
 
-  <button class="primary" id="paste" type="button">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
-    <span id="pasteLabel">Вставити з буфера</span>
-  </button>
-  <p class="hint">У Claude чи Gemini натисни «Копіювати» під відповіддю, потім — цю кнопку. Або виділи текст → «Поділитися» → «На годинник».</p>
+  <div class="paste-zone" id="pasteZone">
+    <textarea id="pasteBox" placeholder=" " aria-label="Встав відповідь сюди" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <div class="pz-hint" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+      <b>Натисни й утримуй тут</b>
+      <span>→ «Вставити». Текст одразу піде на годинник.</span>
+    </div>
+  </div>
+  <div class="pz-actions hidden" id="boxActions">
+    <button class="primary" id="boxSend" type="button">Надіслати на годинник</button>
+    <button class="secondary" id="boxClear" type="button">Очистити</button>
+  </div>
+  <p class="hint">Спершу натисни «Копіювати» під відповіддю в Claude чи Gemini.</p>
 
   <div id="result" class="result hidden" role="status">
     <div class="r-head" id="resultHead"></div>
     <div class="r-title" id="resultTitle"></div>
     <div class="r-actions" id="resultActions"></div>
   </div>
-
-  <details id="manual">
-    <summary>Вставити вручну</summary>
-    <div class="details-body">
-      <textarea id="manualText" placeholder="Натисни й утримуй тут → «Вставити»"></textarea>
-      <button class="secondary" id="manualSend" type="button">Надіслати на годинник</button>
-    </div>
-  </details>
 
   <h2 id="listTitle">На годиннику</h2>
   <div class="list" id="list"><div class="empty">Завантаження…</div></div>
