@@ -138,8 +138,9 @@ Page(
       this.book = book
       this.meta = readMeta(book.id)
       this.cfg = loadCfg()
-      if (this.cfg.last !== book.id) {
+      if (this.cfg.last !== book.id || this.cfg.section !== 'books') {
         this.cfg.last = book.id
+        this.cfg.section = 'books'
         saveCfg(this.cfg)
       }
       this.layout()
@@ -289,12 +290,13 @@ Page(
       push({ url: 'page/bookmenu', params: JSON.stringify({ id: this.book.id }) })
     },
 
-    // Читалка відкрилася першою (після пробудження екрана): назад — на стартову сторінку.
+    // Читалка відкрилася першою (після пробудження екрана): назад — до «Книг»
+    // (а звідти — до відповідей), а не вихід із програми.
     leave() {
       if (this.navigating) return
       this.navigating = true
       globalData().autoOpened = true
-      replace({ url: 'page/index' })
+      replace({ url: 'page/books', params: JSON.stringify({ root: 1 }) })
     },
 
     // ---------- докачування під час читання ----------
@@ -329,6 +331,10 @@ Page(
       }
       const pos = getPos(loadPos(), this.id)
       const sizeChanged = cfg.size !== this.cfg.size
+      if (cfg.section !== 'books') {
+        cfg.section = 'books'
+        saveCfg(cfg)
+      }
       this.cfg = cfg
       setScreenMode({ ms: READER_SCREEN_MS, wristOff: !!cfg.wrist })
       if (sizeChanged) {

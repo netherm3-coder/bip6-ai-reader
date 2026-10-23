@@ -1,19 +1,25 @@
-// Бібліотека: книги на годиннику (скільки прочитано), що качається з телефона,
-// і книги, видалені з годинника, але ще є на телефоні.
+// Бібліотека: книга, яку читаєш, — першою («Продовжити»), далі решта (скільки
+// прочитано), що качається з телефона, і книги, видалені з годинника, але ще є
+// на телефоні. Поки бібліотека відкрита, телефон перевіряється щохвилини.
+// params: open — одразу відкрити цю книгу (запуск без телефона);
+//         root — під бібліотекою нічого немає (прийшли з читалки після пробудження).
 
 import * as hmUI from '@zos/ui'
-import { push } from '@zos/router'
+import { push, replace } from '@zos/router'
 import { getDeviceInfo, getDiskInfo } from '@zos/device'
+import { onGesture, offGesture, GESTURE_RIGHT } from '@zos/interaction'
 import { BasePage } from '@zeppos/zml/base-page'
-import { loadLib, loadPos, getPos, percent, available, complete, readable, restoreBook } from '../utils/books'
+import { loadLib, loadPos, getPos, percent, available, complete, readable, restoreBook, loadCfg, setSection } from '../utils/books'
 import { startSync, stopSync, syncInfo, relist } from '../utils/booksync'
 import { COLOR, STATUS_BAR_H } from '../utils/constants'
-import { statusBar, setProps, removeWidget, tappable, markStarted } from '../utils/ui'
+import { statusBar, setProps, removeWidget, tappable, markStarted, parseParams, globalData } from '../utils/ui'
 import { holdScreen, refreshScreen, releaseScreen, wakeRelaunch } from '../utils/screen'
 import { errorMessage } from '../utils/messages'
 
 const CARD_H = 104
 const GAP = 10
+// Поки бібліотека відкрита, нові книги з телефона з'являються за хвилину.
+const LIST_EVERY = 60 * 1000
 
 function pct(a, b) {
   return b > 0 ? Math.floor((a / b) * 100) : 0
@@ -29,13 +35,16 @@ Page(
   BasePage({
     state: {},
 
-    onInit() {
+    onInit(params) {
+      const p = parseParams(params)
       this.destroyed = false
       markStarted()
       this.navigating = false
       this.widgets = []
       this.cards = {}
       this.note = ''
+      this.openId = String(p.open || '')
+      this.isRoot = !!p.root
     },
 
     build() {
@@ -71,13 +80,58 @@ Page(
         text_style: hmUI.text_style.WRAP
       })
       this.listTop = this.statusY + 60
+      setSection('books')
       this.renderList()
       this.renderStatus(syncInfo())
-      startSync(this, (st, changed) => {
-        if (this.destroyed) return
-        if (changed) this.renderList()
-        this.renderStatus(st)
-      })
+      this.watchBack()
+      this.sync()
+      // Запуск без телефона: одразу до книги, яку читав (назад — сюди). Лише раз:
+      // після «назад» сторінка може збудуватися знову з тими самими параметрами.
+      const g = globalData()
+      if (this.openId && !g.bookOpened) {
+        g.bookOpened = true
+        const id = this.openId
+        this.openId = ''
+        const b = loadLib().books.find((x) => x.id === id)
+        if (readable(b)) {
+          this.navigating = true
+          setTimeout(() => {
+            this.navigating = false
+            if (!this.destroyed) push({ url: 'page/read', params: JSON.stringify({ id }) })
+          }, 10)
+        }
+      }
+    },
+
+    sync() {
+      startSync(
+        this,
+        (st, changed) => {
+          if (this.destroyed) return
+          if (changed) this.renderList()
+          this.renderStatus(st)
+        },
+        { listEvery: LIST_EVERY }
+      )
+    },
+
+    // Бібліотека перша (після пробудження екрана в читалці): свайп праворуч —
+    // до відповідей, а не вихід із програми.
+    watchBack() {
+      if (!this.isRoot) return
+      try {
+        onGesture({
+          callback: (ev) => {
+            if (ev !== GESTURE_RIGHT) return false
+            if (!this.navigating) {
+              this.navigating = true
+              globalData().autoOpened = true
+              replace({ url: 'page/index' })
+            }
+            return true
+          }
+        })
+      } catch (e) {}
     },
 
     status(text, color) {
@@ -114,8 +168,13 @@ Page(
       const W = this.W
       this.lib = loadLib()
       const pos = loadPos()
+      const last = loadCfg().last
       const shown = this.lib.books.filter((b) => !b.hidden)
       const hidden = this.lib.books.filter((b) => b.hidden)
+      // Книга, яку читаєш, — першою.
+      const cur = shown.findIndex((b) => b.id === last && readable(b))
+      if (cur > 0) shown.unshift(shown.splice(cur, 1)[0])
+      this.currentId = cur >= 0 ? last : ''
       let y = this.listTop
       const add = (w) => {
         this.widgets.push(w)
@@ -194,7 +253,7 @@ Page(
       })
       const track = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: x + 18, y: y + 82, w: w - 36, h: 6, radius: 3, color: COLOR.LINE })
       const bar = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: x + 18, y: y + 82, w: 6, h: 6, radius: 3, color: COLOR.BOOK })
-      const c = { b, x, y, w, offset, hidden, bg, sub, bar }
+      const c = { b, x, y, w, offset, hidden, bg, sub, bar, current: !hidden && b.id === this.currentId }
       this.cards[b.id] = c
       this.widgets.push(bg, title, sub, track, bar)
       this.paintCard(c, null)
@@ -214,8 +273,15 @@ Page(
       let text = ''
       let ratio = 0
       let color = COLOR.BOOK
+      let subColor = COLOR.TEXT_DIM
       if (c.hidden) text = 'торкнись, щоб скачати знову'
-      else if (complete(b)) {
+      else if (c.current) {
+        // Книга, яку читаєш: смужка — скільки прочитано.
+        const p = percent(b, c.offset)
+        text = 'Продовжити · ' + p + '%' + (complete(b) ? '' : ' · скачано ' + pct(available(b), b.chars) + '%')
+        ratio = p / 100
+        subColor = COLOR.BOOK
+      } else if (complete(b)) {
         const p = percent(b, c.offset)
         text = who + (p > 0 ? 'прочитано ' + p + '%' : 'не почато')
         ratio = p / 100
@@ -226,7 +292,7 @@ Page(
         ratio = got / 100
         color = COLOR.ACCENT
       }
-      setProps(c.sub, { x: c.x + 18, y: c.y + 46, w: c.w - 36, h: 30, text })
+      setProps(c.sub, { x: c.x + 18, y: c.y + 46, w: c.w - 36, h: 30, text, color: subColor })
       const full = c.w - 36
       // 0 % — смужки не видно (колір доріжки).
       setProps(c.bar, { x: c.x + 18, y: c.y + 82, w: Math.max(6, Math.round(full * Math.min(1, ratio))), h: 6, radius: 3, color: ratio > 0 ? color : COLOR.LINE })
@@ -241,11 +307,7 @@ Page(
         relist()
         this.note = ''
         this.renderList()
-        startSync(this, (st, changed) => {
-          if (this.destroyed) return
-          if (changed) this.renderList()
-          this.renderStatus(st)
-        })
+        this.sync()
         return
       }
       if (!readable(b)) {
@@ -269,17 +331,21 @@ Page(
       refreshScreen()
       wakeRelaunch(false)
       if (this.destroyed) return
+      setSection('books')
       this.renderList()
-      startSync(this, (st, changed) => {
-        if (this.destroyed) return
-        if (changed) this.renderList()
-        this.renderStatus(st)
-      })
+      // Читалка, закриваючись, знімає обробник жестів — повернути свій.
+      this.watchBack()
+      this.sync()
     },
 
     onDestroy() {
       this.destroyed = true
       stopSync(this)
+      if (this.isRoot) {
+        try {
+          offGesture()
+        } catch (e) {}
+      }
       releaseScreen()
     }
   })

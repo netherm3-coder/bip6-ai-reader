@@ -3,6 +3,7 @@ import { createClient, validRepo } from './github.js'
 import { initBooks } from './books-ui.js'
 
 const DEFAULT_REPO = 'netherm3-coder/bip6-ai-inbox'
+const SHARE_CACHE = 'na-hodynnyk-share' // те саме ім'я, що в sw.js
 const TOKEN_URL =
   'https://github.com/settings/personal-access-tokens/new?' +
   new URLSearchParams({
@@ -569,20 +570,37 @@ function renderSource() {
 
 // ---------- «Поділитися» ----------
 
-function readShare() {
-  const p = new URLSearchParams(location.search)
-  if (!p.has('text') && !p.has('url') && !p.has('title')) return null
-  const title = p.get('title') || ''
-  const text = p.get('text') || ''
-  const url = p.get('url') || ''
+function shareFrom(title, text, url) {
   let raw = text
   if (url && raw.indexOf(url) < 0 && !text) raw = url
   if (!raw && title) raw = title
+  const hint = /gemini/i.test(title) ? 'gemini' : /claude/i.test(title) ? 'claude' : ''
+  return raw ? { raw, hint } : null
+}
+
+// Старий спосіб «Поділитися» — параметри в адресі (поки телефон не оновив установлену сторінку).
+function readShare() {
+  const p = new URLSearchParams(location.search)
+  if (!p.has('text') && !p.has('url') && !p.has('title')) return null
   try {
     history.replaceState(null, '', location.pathname)
   } catch (e) {}
-  const hint = /gemini/i.test(title) ? 'gemini' : /claude/i.test(title) ? 'claude' : ''
-  return raw ? { raw, hint } : null
+  return shareFrom(p.get('title') || '', p.get('text') || '', p.get('url') || '')
+}
+
+// Новий спосіб: sw.js поклав поділений текст у кеш і відкрив сторінку з ?shared=text.
+async function takeSharedText() {
+  try {
+    const cache = await caches.open(SHARE_CACHE)
+    const key = new URL('__shared-text', location.href).href
+    const res = await cache.match(key)
+    if (!res) return null
+    await cache.delete(key)
+    const d = await res.json()
+    return shareFrom(String(d.title || ''), String(d.text || ''), String(d.url || ''))
+  } catch (e) {
+    return null
+  }
 }
 
 // ---------- вкладки ----------
@@ -599,8 +617,9 @@ function setTab(tab) {
 
 // ---------- старт ----------
 
-function init() {
+async function init() {
   books = initBooks({
+    shareCache: SHARE_CACHE,
     client,
     hasToken: () => !!state.token,
     fmtTime,
@@ -647,8 +666,19 @@ function init() {
     navigator.serviceWorker.register('sw.js').catch(() => {})
   }
 
-  const shared = readShare()
-  setTab(shared ? 'answers' : local.get('tab', 'answers'))
+  // «Поділитися» з іншої програми: ?shared=book — файл книги, ?shared=text — відповідь AI.
+  const kind = new URLSearchParams(location.search).get('shared')
+  let shared = readShare()
+  if (kind) {
+    try {
+      history.replaceState(null, '', location.pathname)
+    } catch (e) {}
+    if (kind === 'text') shared = await takeSharedText()
+  }
+  const bookShare = kind === 'book' || kind === 'failed'
+  setTab(bookShare ? 'books' : shared ? 'answers' : local.get('tab', 'answers'))
+  if (kind === 'book') books.openShared()
+  else if (kind === 'failed') books.sharedFailed()
   if (!state.token) {
     if (shared) session.set('pending', JSON.stringify(shared))
     setStatus('warn', 'Не налаштовано — натисни ⚙')
@@ -662,4 +692,4 @@ function init() {
   })
 }
 
-init()
+init().catch((e) => console.error(e))

@@ -114,10 +114,14 @@ export function initBooks(ctx) {
     $('bookSend').textContent = on ? label || 'Надсилаю…' : 'Надіслати'
   }
 
-  async function onFile(e) {
+  function onFile(e) {
     const input = e.target
     const file = input.files && input.files[0]
     input.value = ''
+    if (file) handleFile(file)
+  }
+
+  async function handleFile(file) {
     if (!file || st.busy) return
     $('bookPreview').classList.add('hidden')
     st.book = null
@@ -183,10 +187,39 @@ export function initBooks(ctx) {
   $('bookSend').addEventListener('click', send)
   $('bookCancel').addEventListener('click', cancel)
 
+  // Файл, поділений з іншої програми (Telegram, «Файли»): sw.js поклав його в кеш.
+  async function openShared() {
+    let res = null
+    try {
+      const cache = await caches.open(ctx.shareCache)
+      const key = new URL('__shared-book', location.href).href
+      res = await cache.match(key)
+      if (res) await cache.delete(key)
+    } catch (e) {
+      res = null
+    }
+    if (!res) {
+      sharedFailed()
+      return
+    }
+    let name = 'book'
+    try {
+      name = decodeURIComponent(res.headers.get('X-Name') || 'book')
+    } catch (e) {}
+    const blob = await res.blob()
+    await handleFile(new File([blob], name))
+  }
+
+  function sharedFailed() {
+    show('err', 'Файл не дійшов', 'Поділися ним ще раз або вибери кнопкою «Вибрати книгу».')
+  }
+
   return {
     shown() {
       if (!st.loaded) load()
     },
-    reload: load
+    reload: load,
+    openShared,
+    sharedFailed
   }
 }

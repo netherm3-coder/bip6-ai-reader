@@ -1,6 +1,7 @@
 // Список відповідей: спершу збережені на годиннику, потім оновлення з телефона.
-// Угорі — «Книги» і «Продовжити» (остання книга). Якщо телефона немає поруч,
-// а книга читалася, програма одразу відкривається на ній.
+// Книги — окремо, за кнопкою «Книги» (тут лише відсотки, поки качається нова).
+// Якщо востаннє читав книгу, а телефона немає поруч, програма одразу відкриває
+// «Книги» → цю книгу.
 
 import * as hmUI from '@zos/ui'
 import { push } from '@zos/router'
@@ -10,9 +11,9 @@ import { BasePage } from '@zeppos/zml/base-page'
 import { loadIndex, syncItems, hasText, writeText } from '../utils/cache'
 import { formatStamp } from '../utils/time'
 import { COLOR, SOURCE_COLOR, STATUS_BAR_H, PREFETCH } from '../utils/constants'
-import { statusBar, setProps, removeWidget, globalData, tappable, markStarted } from '../utils/ui'
+import { statusBar, setProps, removeWidget, globalData, markStarted } from '../utils/ui'
 import { holdScreen, refreshScreen, releaseScreen, wakeRelaunch } from '../utils/screen'
-import { lastReadable, loadPos, getPos, percent, complete, available } from '../utils/books'
+import { lastReadable, loadCfg, setSection } from '../utils/books'
 import { startSync, stopSync, syncInfo, phoneConnected } from '../utils/booksync'
 import { errorMessage, bleCode } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
@@ -37,7 +38,7 @@ Page(
       this.loading = false
       this.navigating = false
       this.rowWidgets = []
-      this.bookWidgets = []
+      this.refreshed = false
       this.press = null
       this.idx = loadIndex()
       markStarted()
@@ -96,73 +97,25 @@ Page(
         align_v: hmUI.align.TOP,
         text_style: hmUI.text_style.WRAP
       })
-      this.bookTop = y + 60
-      this.renderBook()
+      this.listTop = y + 60
       this.renderList()
 
-      // Перший запуск без телефона, а книга читалася — одразу до неї.
+      // Запуск без телефона, а востаннє читав книгу — одразу «Книги» → ця книга.
       const g = globalData()
-      const book = lastReadable()
       if (!g.autoOpened) {
         g.autoOpened = true
+        const book = loadCfg().section === 'books' ? lastReadable() : null
         if (book && !phoneConnected()) {
           this.navigating = true
           setTimeout(() => {
             this.navigating = false
-            if (!this.destroyed) push({ url: 'page/read', params: JSON.stringify({ id: book.id }) })
+            if (!this.destroyed) push({ url: 'page/books', params: JSON.stringify({ open: book.id }) })
           }, 10)
           return
         }
       }
+      setSection('ai')
       this.refresh()
-    },
-
-    // Картка «Продовжити»: остання книга і скільки прочитано.
-    renderBook() {
-      this.bookWidgets.forEach(removeWidget)
-      this.bookWidgets = []
-      const W = this.W
-      const b = lastReadable()
-      this.listTop = this.bookTop
-      if (!b) return
-      const x = 16
-      const w = W - 32
-      const y = this.bookTop
-      const h = ROW_H
-      const p = percent(b, getPos(loadPos(), b.id))
-      const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, { x, y, w, h, radius: 20, color: COLOR.CARD })
-      const bar = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: x + 10, y: y + 18, w: 6, h: h - 36, radius: 3, color: COLOR.BOOK })
-      const title = hmUI.createWidget(hmUI.widget.TEXT, {
-        x: x + 28,
-        y: y + 10,
-        w: w - 44,
-        h: 40,
-        text: b.title,
-        text_size: 26,
-        color: COLOR.TEXT,
-        align_h: hmUI.align.LEFT,
-        align_v: hmUI.align.CENTER_V,
-        text_style: hmUI.text_style.ELLIPSIS
-      })
-      const sub = hmUI.createWidget(hmUI.widget.TEXT, {
-        x: x + 28,
-        y: y + 52,
-        w: w - 44,
-        h: 30,
-        text: 'Продовжити · ' + p + '%' + (complete(b) ? '' : ' · скачано ' + Math.floor((available(b) / Math.max(1, b.chars)) * 100) + '%'),
-        text_size: 20,
-        color: COLOR.BOOK,
-        align_h: hmUI.align.LEFT,
-        align_v: hmUI.align.CENTER_V,
-        text_style: hmUI.text_style.ELLIPSIS
-      })
-      this.bookWidgets = [bg, bar, title, sub]
-      tappable(
-        this.bookWidgets,
-        () => this.go('page/read', { id: b.id }),
-        (on) => setProps(bg, { x, y, w, h, radius: 20, color: on ? COLOR.CARD_PRESS : COLOR.CARD })
-      )
-      this.listTop = y + h + ROW_GAP + 6
     },
 
     go(url, params) {
@@ -314,6 +267,7 @@ Page(
 
     refresh() {
       if (this.loading) return
+      this.refreshed = true
       if (!phoneConnected()) {
         const saved = this.idx.items.length ? ' Показано збережені.' : ''
         this.setStatus('Телефон не підключений.' + saved, COLOR.WARN)
@@ -369,11 +323,10 @@ Page(
       refreshScreen()
       wakeRelaunch(false)
       if (this.destroyed) return
-      // Повернулися з книги: оновити «Продовжити» і зсунути список, якщо картка з'явилась.
-      const before = this.listTop
-      this.renderBook()
-      if (this.listTop !== before) this.renderList()
-      if (!this.loading) this.startBooks()
+      setSection('ai')
+      // Програма відкрилась одразу на книзі — відповіді ще не оновлювались.
+      if (!this.refreshed) this.refresh()
+      else if (!this.loading) this.startBooks()
     },
 
     onDestroy() {

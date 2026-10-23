@@ -266,18 +266,29 @@ export function setPos(id, offset) {
 
 export const FONT_SIZES = [24, 28, 32]
 
+// section — де був востаннє: 'books' (книги) чи 'ai' (відповіді). Без телефона
+// програма відкривається одразу на книзі, лише якщо востаннє читав книгу.
 export function loadCfg() {
   const raw = readAny(CFG) || {}
   const size = Math.floor(Number(raw.size))
   return {
     size: size >= 0 && size < FONT_SIZES.length ? size : 1,
     wrist: raw.wrist ? 1 : 0,
-    last: validId(raw.last) ? String(raw.last) : ''
+    last: validId(raw.last) ? String(raw.last) : '',
+    section: raw.section === 'books' ? 'books' : 'ai'
   }
 }
 
 export function saveCfg(cfg) {
-  return writeJson(CFG, { size: cfg.size, wrist: cfg.wrist ? 1 : 0, last: cfg.last || '' })
+  return writeJson(CFG, { size: cfg.size, wrist: cfg.wrist ? 1 : 0, last: cfg.last || '', section: cfg.section === 'books' ? 'books' : 'ai' })
+}
+
+export function setSection(section) {
+  const cfg = loadCfg()
+  const s = section === 'books' ? 'books' : 'ai'
+  if (cfg.section === s) return
+  cfg.section = s
+  saveCfg(cfg)
 }
 
 export function percent(b, offset) {

@@ -43,10 +43,11 @@ export function relist() {
   shared().listedAt = 0
 }
 
-export function startSync(page, onChange) {
+// opts.listEvery — як часто перевіряти список книг на телефоні (бібліотека — щохвилини).
+export function startSync(page, onChange, opts) {
   const st = shared()
   stopSync(page)
-  const me = { page, onChange, alive: true, timer: null }
+  const me = { page, onChange, alive: true, timer: null, listEvery: (opts && opts.listEvery) || LIST_EVERY }
   st.owner = me
   page._bsync = me
   schedule(me, 30)
@@ -140,7 +141,7 @@ function step(me) {
     schedule(me, OFFLINE_MS)
     return
   }
-  if (!st.listedAt || Date.now() - st.listedAt > LIST_EVERY) {
+  if (!st.listedAt || Date.now() - st.listedAt > me.listEvery) {
     setPhase(me, 'checking')
     request(me, { method: 'books' }, 25000)
       .then((res) => {
@@ -166,7 +167,7 @@ function step(me) {
   const b = nextBook(lib)
   if (!b) {
     setPhase(me, 'idle', { id: '', title: '' })
-    schedule(me, LIST_EVERY)
+    schedule(me, me.listEvery)
     return
   }
   if (!enoughSpace(b)) {
