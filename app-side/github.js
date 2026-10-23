@@ -1,9 +1,13 @@
-// Читання відповідей із приватного репозиторію GitHub у сервісі Zepp на телефоні.
+// Читання відповідей і книг із приватного репозиторію GitHub у сервісі Zepp на телефоні.
 // Залежності передаються ззовні, щоб модуль можна було перевірити без Zepp.
+// Книги: books/index.json — список, books/<id>.json — розділи, books/<id>.txt — текст.
 
 const API = 'https://api.github.com/repos/'
 const TIMEOUT_MS = 15000
+const BOOK_TIMEOUT_MS = 90000
 const ID_RE = /^[a-z0-9]{6,24}$/
+// Скільки символів книги в одній частині, що йде на годинник.
+export const PART = 8000
 
 export function validRepo(repo) {
   return /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(String(repo || ''))
@@ -80,6 +84,29 @@ export function cleanItem(raw) {
   }
 }
 
+export function cleanBook(raw) {
+  if (!raw || typeof raw !== 'object' || !ID_RE.test(String(raw.id || ''))) return null
+  const chars = Math.floor(Number(raw.chars) || 0)
+  if (chars <= 0) return null
+  return {
+    id: String(raw.id),
+    title: String(raw.title || '').slice(0, 120),
+    author: String(raw.author || '').slice(0, 80),
+    chars,
+    ts: Number(raw.ts) || 0
+  }
+}
+
+function cleanOffsets(list, len, withTitle) {
+  const out = []
+  ;(Array.isArray(list) ? list : []).forEach((item) => {
+    const o = Math.floor(Number(withTitle ? item && item[0] : item))
+    if (!(o >= 0) || o >= len) return
+    out.push(withTitle ? [o, String((item && item[1]) || '').slice(0, 80)] : o)
+  })
+  return out.slice(0, withTitle ? 1500 : 4000)
+}
+
 export function createReader(deps) {
   const doFetch = deps.fetch
   const setTimer = deps.setTimeout || setTimeout
@@ -87,7 +114,7 @@ export function createReader(deps) {
   const getRepo = () => String(deps.getRepo() || '').trim()
   const now = deps.now || (() => Date.now())
 
-  function request(path, raw) {
+  function request(path, raw, timeoutMs) {
     const token = getToken()
     const repo = getRepo()
     if (!token) return Promise.reject(fail('no_token'))
@@ -120,7 +147,19 @@ export function createReader(deps) {
         }
         return res ? res.body : ''
       })
-    return withTimeout(call, TIMEOUT_MS, setTimer)
+    return withTimeout(call, timeoutMs || TIMEOUT_MS, setTimer)
+  }
+
+  // Текст книги тримаємо в пам'яті, поки годинник забирає його частинами.
+  const texts = []
+  function bookText(id) {
+    for (let i = 0; i < texts.length; i++) if (texts[i].id === id) return Promise.resolve(texts[i].text)
+    return request('/contents/books/' + id + '.txt', true, BOOK_TIMEOUT_MS).then((body) => {
+      const text = bodyText(body)
+      texts.unshift({ id, text })
+      if (texts.length > 2) texts.pop()
+      return text
+    })
   }
 
   return {
@@ -141,6 +180,44 @@ export function createReader(deps) {
     get(id) {
       if (!ID_RE.test(String(id || ''))) return Promise.reject(fail('bad_id'))
       return request('/contents/m/' + id + '.txt', true).then((body) => ({ id, text: bodyText(body) }))
+    },
+
+    books() {
+      return request('/contents/books/index.json', true)
+        .then((body) => {
+          const data = bodyJson(body)
+          if (!data || !Array.isArray(data.books)) throw fail('bad_data')
+          const books = []
+          data.books.forEach((raw) => {
+            const b = cleanBook(raw)
+            if (b) books.push(b)
+          })
+          return { books: books.slice(0, 200), p: PART, at: now() }
+        })
+        .catch((e) => {
+          if (e && e.code === 'not_found') return { books: [], p: PART, at: now() }
+          throw e
+        })
+    },
+
+    bookMeta(id) {
+      if (!ID_RE.test(String(id || ''))) return Promise.reject(fail('bad_id'))
+      return Promise.all([request('/contents/books/' + id + '.json', true), bookText(id)]).then((r) => {
+        const meta = bodyJson(r[0]) || {}
+        const len = r[1].length
+        return { id, chars: len, ch: cleanOffsets(meta.ch, len, true), h: cleanOffsets(meta.h, len, false) }
+      })
+    },
+
+    bookPart(id, i, p) {
+      if (!ID_RE.test(String(id || ''))) return Promise.reject(fail('bad_id'))
+      const size = Math.max(1000, Math.min(20000, Math.floor(Number(p) || PART)))
+      const n = Math.floor(Number(i))
+      return bookText(id).then((text) => {
+        const start = n * size
+        if (!(n >= 0) || start >= text.length) throw fail('bad_id')
+        return { id, i: n, text: text.slice(start, start + size) }
+      })
     },
 
     check() {

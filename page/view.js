@@ -7,8 +7,8 @@ import { BasePage } from '@zeppos/zml/base-page'
 import { loadIndex, readText, writeText, markSeen } from '../utils/cache'
 import { formatStamp } from '../utils/time'
 import { COLOR, SOURCE_COLOR, STATUS_BAR_H, MAX_SHOWN } from '../utils/constants'
-import { statusBar, parseParams, textHeight, splitChunks, setProps } from '../utils/ui'
-import { holdScreen, refreshScreen, releaseScreen } from '../utils/screen'
+import { statusBar, parseParams, textHeight, splitChunks, setProps, markStarted } from '../utils/ui'
+import { holdScreen, refreshScreen, releaseScreen, wakeRelaunch } from '../utils/screen'
 import { errorMessage, bleCode } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
 
@@ -23,6 +23,7 @@ Page(
 
     onInit(params) {
       const p = parseParams(params)
+      markStarted()
       this.id = String(p.id || '')
       this.destroyed = false
       this.idx = loadIndex()
@@ -34,6 +35,7 @@ Page(
       this.W = W
       statusBar(true)
       holdScreen()
+      wakeRelaunch(false)
 
       const textW = W - PAD_X * 2
       let y = STATUS_BAR_H + 6

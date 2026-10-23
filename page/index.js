@@ -1,4 +1,6 @@
 // Список відповідей: спершу збережені на годиннику, потім оновлення з телефона.
+// Угорі — «Книги» і «Продовжити» (остання книга). Якщо телефона немає поруч,
+// а книга читалася, програма одразу відкривається на ній.
 
 import * as hmUI from '@zos/ui'
 import { push } from '@zos/router'
@@ -8,8 +10,10 @@ import { BasePage } from '@zeppos/zml/base-page'
 import { loadIndex, syncItems, hasText, writeText } from '../utils/cache'
 import { formatStamp } from '../utils/time'
 import { COLOR, SOURCE_COLOR, STATUS_BAR_H, PREFETCH } from '../utils/constants'
-import { statusBar, setProps, removeWidget } from '../utils/ui'
-import { holdScreen, refreshScreen, releaseScreen } from '../utils/screen'
+import { statusBar, setProps, removeWidget, globalData, tappable, markStarted } from '../utils/ui'
+import { holdScreen, refreshScreen, releaseScreen, wakeRelaunch } from '../utils/screen'
+import { lastReadable, loadPos, getPos, percent, complete, available } from '../utils/books'
+import { startSync, stopSync, syncInfo, phoneConnected } from '../utils/booksync'
 import { errorMessage, bleCode } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
 
@@ -33,8 +37,10 @@ Page(
       this.loading = false
       this.navigating = false
       this.rowWidgets = []
+      this.bookWidgets = []
       this.press = null
       this.idx = loadIndex()
+      markStarted()
     },
 
     build() {
@@ -43,11 +49,14 @@ Page(
       statusBar(true)
       holdScreen()
 
+      wakeRelaunch(false)
+
       let y = STATUS_BAR_H + 6
+      const half = Math.floor((W - 48 - 10) / 2)
       hmUI.createWidget(hmUI.widget.BUTTON, {
         x: 24,
         y,
-        w: W - 48,
+        w: half,
         h: 58,
         radius: 29,
         normal_color: COLOR.NEUTRAL,
@@ -56,6 +65,22 @@ Page(
         text_size: 26,
         color: COLOR.TEXT,
         click_func: () => this.refresh()
+      })
+      this.booksBtnX = 24 + half + 10
+      this.booksBtnY = y
+      this.booksBtnW = half
+      this.booksBtn = hmUI.createWidget(hmUI.widget.BUTTON, {
+        x: this.booksBtnX,
+        y,
+        w: half,
+        h: 58,
+        radius: 29,
+        normal_color: COLOR.NEUTRAL,
+        press_color: COLOR.NEUTRAL_PRESS,
+        text: 'Книги',
+        text_size: 26,
+        color: COLOR.TEXT,
+        click_func: () => this.go('page/books')
       })
       y += 58 + 8
       this.statusY = y
@@ -71,9 +96,98 @@ Page(
         align_v: hmUI.align.TOP,
         text_style: hmUI.text_style.WRAP
       })
-      this.listTop = y + 60
+      this.bookTop = y + 60
+      this.renderBook()
       this.renderList()
+
+      // Перший запуск без телефона, а книга читалася — одразу до неї.
+      const g = globalData()
+      const book = lastReadable()
+      if (!g.autoOpened) {
+        g.autoOpened = true
+        if (book && !phoneConnected()) {
+          this.navigating = true
+          setTimeout(() => {
+            this.navigating = false
+            if (!this.destroyed) push({ url: 'page/read', params: JSON.stringify({ id: book.id }) })
+          }, 10)
+          return
+        }
+      }
       this.refresh()
+    },
+
+    // Картка «Продовжити»: остання книга і скільки прочитано.
+    renderBook() {
+      this.bookWidgets.forEach(removeWidget)
+      this.bookWidgets = []
+      const W = this.W
+      const b = lastReadable()
+      this.listTop = this.bookTop
+      if (!b) return
+      const x = 16
+      const w = W - 32
+      const y = this.bookTop
+      const h = ROW_H
+      const p = percent(b, getPos(loadPos(), b.id))
+      const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, { x, y, w, h, radius: 20, color: COLOR.CARD })
+      const bar = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: x + 10, y: y + 18, w: 6, h: h - 36, radius: 3, color: COLOR.BOOK })
+      const title = hmUI.createWidget(hmUI.widget.TEXT, {
+        x: x + 28,
+        y: y + 10,
+        w: w - 44,
+        h: 40,
+        text: b.title,
+        text_size: 26,
+        color: COLOR.TEXT,
+        align_h: hmUI.align.LEFT,
+        align_v: hmUI.align.CENTER_V,
+        text_style: hmUI.text_style.ELLIPSIS
+      })
+      const sub = hmUI.createWidget(hmUI.widget.TEXT, {
+        x: x + 28,
+        y: y + 52,
+        w: w - 44,
+        h: 30,
+        text: 'Продовжити · ' + p + '%' + (complete(b) ? '' : ' · скачано ' + Math.floor((available(b) / Math.max(1, b.chars)) * 100) + '%'),
+        text_size: 20,
+        color: COLOR.BOOK,
+        align_h: hmUI.align.LEFT,
+        align_v: hmUI.align.CENTER_V,
+        text_style: hmUI.text_style.ELLIPSIS
+      })
+      this.bookWidgets = [bg, bar, title, sub]
+      tappable(
+        this.bookWidgets,
+        () => this.go('page/read', { id: b.id }),
+        (on) => setProps(bg, { x, y, w, h, radius: 20, color: on ? COLOR.CARD_PRESS : COLOR.CARD })
+      )
+      this.listTop = y + h + ROW_GAP + 6
+    },
+
+    go(url, params) {
+      if (this.navigating) return
+      this.navigating = true
+      setTimeout(() => {
+        this.navigating = false
+      }, 1500)
+      push(params ? { url, params: JSON.stringify(params) } : { url })
+    },
+
+    // Підпис кнопки «Книги»: скільки скачано нової книги.
+    onBookSync(st) {
+      if (this.destroyed) return
+      const text = st.phase === 'loading' && st.parts ? 'Книги · ' + Math.floor((st.have / st.parts) * 100) + '%' : 'Книги'
+      if (text === this.booksText) return
+      this.booksText = text
+      setProps(this.booksBtn, { x: this.booksBtnX, y: this.booksBtnY, w: this.booksBtnW, h: 58, text, text_size: text === 'Книги' ? 26 : 22 })
+    },
+
+    startBooks() {
+      if (this.destroyed) return
+      const me = this._bsync
+      if (me && me.alive && syncInfo().owner === me) return
+      startSync(this, (st) => this.onBookSync(st))
     },
 
     setStatus(text, color) {
@@ -200,6 +314,12 @@ Page(
 
     refresh() {
       if (this.loading) return
+      if (!phoneConnected()) {
+        const saved = this.idx.items.length ? ' Показано збережені.' : ''
+        this.setStatus('Телефон не підключений.' + saved, COLOR.WARN)
+        this.startBooks()
+        return
+      }
       this.loading = true
       this.setStatus('Оновлення…')
       this.request({ method: 'list' }, { timeout: 25000 })
@@ -208,6 +328,7 @@ Page(
           if (this.destroyed) return
           if (!res || res.error) {
             this.setStatus(errorMessage((res && res.error) || 'bad_data'), COLOR.WARN)
+            this.startBooks()
             return
           }
           const changed = syncItems(this.idx, res.items, Date.now())
@@ -220,6 +341,7 @@ Page(
           if (this.destroyed) return
           const saved = this.idx.items.length ? ' Показано збережені.' : ''
           this.setStatus(errorMessage(bleCode(e)) + saved, COLOR.WARN)
+          this.startBooks()
         })
     },
 
@@ -227,24 +349,36 @@ Page(
     prefetch() {
       const queue = this.idx.items.filter((it) => !hasText(it.id)).slice(0, PREFETCH)
       const next = () => {
-        if (this.destroyed || !queue.length) return
+        if (this.destroyed) return
+        if (!queue.length) {
+          this.startBooks()
+          return
+        }
         const item = queue.shift()
         this.request({ method: 'get', params: { id: item.id } }, { timeout: 30000 })
           .then((res) => {
             if (res && !res.error && typeof res.text === 'string') writeText(item.id, res.text)
             next()
           })
-          .catch(() => {})
+          .catch(() => this.startBooks())
       }
       next()
     },
 
     onResume() {
       refreshScreen()
+      wakeRelaunch(false)
+      if (this.destroyed) return
+      // Повернулися з книги: оновити «Продовжити» і зсунути список, якщо картка з'явилась.
+      const before = this.listTop
+      this.renderBook()
+      if (this.listTop !== before) this.renderList()
+      if (!this.loading) this.startBooks()
     },
 
     onDestroy() {
       this.destroyed = true
+      stopSync(this)
       releaseScreen()
     }
   })

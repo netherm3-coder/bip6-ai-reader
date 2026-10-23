@@ -5,12 +5,12 @@
     "appName": "AI Читалка",
     "appType": "app",
     "version": {
-      "code": 1,
-      "name": "1.0.0"
+      "code": 2,
+      "name": "1.1.0"
     },
     "icon": "icon.png",
     "vender": "netherm3",
-    "description": "Відповіді Claude і Gemini з телефона — на годиннику"
+    "description": "Відповіді Claude і Gemini та книги з телефона — на годиннику"
   },
   "permissions": ["data:os.device.info", "device:os.local_storage"],
   "runtime": {
@@ -25,7 +25,7 @@
     "default": {
       "module": {
         "page": {
-          "pages": ["page/index", "page/view"]
+          "pages": ["page/index", "page/view", "page/books", "page/read", "page/bookmenu", "page/toc"]
         },
         "app-side": {
           "path": "app-side/index"

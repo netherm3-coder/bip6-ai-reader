@@ -14,7 +14,12 @@ export const COLOR = {
   NEUTRAL_PRESS: 0x48484a,
   WARN: 0xff9f0a,
   CLAUDE: 0xd97757,
-  GEMINI: 0x6c8cff
+  GEMINI: 0x6c8cff,
+  BOOK: 0x2fc6a0,
+  BOOK_TEXT: 0xe6e6e6,
+  HEADING: 0xffc96b,
+  DANGER: 0xff6b5e,
+  DANGER_PRESS: 0x8a2d26
 }
 
 export const SOURCE_COLOR = {
@@ -34,3 +39,6 @@ export const PREFETCH = 3
 // Поки програма відкрита, екран не гасне сам. Запобіжник для батареї:
 // згасне після 20 хв без жодного дотику.
 export const SCREEN_ON_MS = 20 * 60 * 1000
+
+// Читалка книг: екран гасне після 5 хв без дотиків (піднімеш руку — та сама сторінка).
+export const READER_SCREEN_MS = 5 * 60 * 1000

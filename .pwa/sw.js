@@ -1,8 +1,29 @@
-// Кешує оболонку сторінки, щоб вона відкривалася швидко й без мережі.
+// Кешує оболонку сторінки й конвертер книг, щоб вона відкривалася швидко й без мережі.
 // Запити до GitHub API не кешуються.
 
-const CACHE = 'na-hodynnyk-v3'
-const SHELL = ['./', 'index.html', 'app.js', 'clean.js', 'github.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']
+const CACHE = 'na-hodynnyk-v4'
+// pdf.js (vendor/pdf*.js, ~1,8 МБ) не тут: кешується, коли вперше знадобиться.
+const SHELL = [
+  './',
+  'index.html',
+  'app.js',
+  'clean.js',
+  'github.js',
+  'books-ui.js',
+  'convert/index.js',
+  'convert/text.js',
+  'convert/xml.js',
+  'convert/html.js',
+  'convert/epub.js',
+  'convert/fb2.js',
+  'convert/txt.js',
+  'convert/docx.js',
+  'convert/pdf.js',
+  'vendor/unzip.js',
+  'manifest.webmanifest',
+  'icons/icon-192.png',
+  'icons/icon-512.png'
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

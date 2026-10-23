@@ -1,7 +1,7 @@
 {
-  "name": "На годинник — відповіді AI на Bip 6",
+  "name": "На годинник — відповіді AI і книги на Bip 6",
   "short_name": "На годинник",
-  "description": "Надсилає відповіді Claude і Gemini на годинник Amazfit Bip 6",
+  "description": "Надсилає відповіді Claude і Gemini та книги на годинник Amazfit Bip 6",
   "lang": "uk",
   "start_url": "./",
   "scope": "./",

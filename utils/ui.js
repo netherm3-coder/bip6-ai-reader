@@ -1,4 +1,5 @@
 import * as hmUI from '@zos/ui'
+import { getScrollTop } from '@zos/page'
 
 export function statusBar(visible) {
   try {
@@ -14,6 +15,25 @@ export function parseParams(params) {
   } catch (e) {
     return {}
   }
+}
+
+// Спільне для всіх сторінок програми (кожна сторінка — окремий модуль).
+export function globalData() {
+  try {
+    const app = getApp()
+    const g = app && app._options && app._options.globalData
+    if (g) return g
+  } catch (e) {}
+  return globalData.fallback || (globalData.fallback = {})
+}
+
+// Позначає, що програма вже показала сторінку. true — ця сторінка перша
+// (наприклад, читалку відкрила система після пробудження екрана).
+export function markStarted() {
+  const g = globalData()
+  const first = !g.started
+  g.started = true
+  return first
 }
 
 export function setProps(widget, props) {
@@ -103,4 +123,34 @@ export function splitChunks(text, maxLen) {
   })
   if (cur) chunks.push(cur)
   return chunks
+}
+
+export function scrollTop() {
+  try {
+    return getScrollTop() || 0
+  } catch (e) {
+    return 0
+  }
+}
+
+// Торкання групи віджетів (картка): не спрацьовує, якщо сторінку прокрутили.
+export function tappable(widgets, onTap, onPress) {
+  let press = null
+  const down = () => {
+    press = { top: scrollTop(), t: Date.now() }
+    if (onPress) onPress(true)
+  }
+  const up = () => {
+    const p = press
+    press = null
+    if (onPress) onPress(false)
+    if (!p || Math.abs(scrollTop() - p.top) > 6 || Date.now() - p.t > 1500) return
+    onTap()
+  }
+  widgets.forEach((w) => {
+    try {
+      w.addEventListener(hmUI.event.CLICK_DOWN, down)
+      w.addEventListener(hmUI.event.CLICK_UP, up)
+    } catch (e) {}
+  })
 }

@@ -1,5 +1,6 @@
 import { cleanText, makeTitle, looksLikeOnlyLink, detectSource } from './clean.js'
 import { createClient, validRepo } from './github.js'
+import { initBooks } from './books-ui.js'
 
 const DEFAULT_REPO = 'netherm3-coder/bip6-ai-inbox'
 const TOKEN_URL =
@@ -68,8 +69,10 @@ const state = {
   busy: false,
   last: null, // останнє надіслане: { text, at, id, title }
   reading: false, // чекаємо на буфер (можливо, на запит дозволу)
-  boxPrev: '' // вміст поля до останньої зміни
+  boxPrev: '', // вміст поля до останньої зміни
+  tab: 'answers'
 }
+let books = null
 
 const $ = (id) => document.getElementById(id)
 
@@ -540,6 +543,7 @@ async function saveSettings() {
     msg.className = 'msg ok'
     msg.textContent = '✓ Підключено. Репозиторій приватний.'
     await loadList()
+    if (books) books.reload()
     const pending = session.get('pending')
     if (pending) {
       try {
@@ -558,7 +562,7 @@ async function saveSettings() {
 // ---------- джерело ----------
 
 function renderSource() {
-  document.querySelectorAll('.seg button').forEach((b) => {
+  document.querySelectorAll('#srcSeg button').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.src === state.src))
   })
 }
@@ -581,9 +585,33 @@ function readShare() {
   return raw ? { raw, hint } : null
 }
 
+// ---------- вкладки ----------
+
+function setTab(tab) {
+  state.tab = tab === 'books' ? 'books' : 'answers'
+  local.set('tab', state.tab)
+  $('tabAnswers').setAttribute('aria-pressed', String(state.tab === 'answers'))
+  $('tabBooks').setAttribute('aria-pressed', String(state.tab === 'books'))
+  $('main').classList.toggle('hidden', state.tab !== 'answers')
+  $('booksTab').classList.toggle('hidden', state.tab !== 'books')
+  if (state.tab === 'books' && books) books.shown()
+}
+
 // ---------- старт ----------
 
 function init() {
+  books = initBooks({
+    client,
+    hasToken: () => !!state.token,
+    fmtTime,
+    svgX,
+    errText,
+    openSettings,
+    ensureConnection: async () => (state.check && state.check.ok ? state.check : checkConnection()),
+    checkText: (res) => (res.code === 'public' ? ERR.public : errText(res))
+  })
+  $('tabAnswers').addEventListener('click', () => setTab('answers'))
+  $('tabBooks').addEventListener('click', () => setTab('books'))
   $('tokenLink').href = TOKEN_URL
   $('openSettings').addEventListener('click', () => {
     if ($('settings').classList.contains('hidden')) openSettings()
@@ -606,7 +634,7 @@ function init() {
   $('boxSend').addEventListener('click', submitBox)
   $('boxClear').addEventListener('click', clearBox)
   updateBox()
-  document.querySelectorAll('.seg button').forEach((b) =>
+  document.querySelectorAll('#srcSeg button').forEach((b) =>
     b.addEventListener('click', () => {
       state.src = b.dataset.src === 'gemini' ? 'gemini' : 'claude'
       local.set('src', state.src)
@@ -620,6 +648,7 @@ function init() {
   }
 
   const shared = readShare()
+  setTab(shared ? 'answers' : local.get('tab', 'answers'))
   if (!state.token) {
     if (shared) session.set('pending', JSON.stringify(shared))
     setStatus('warn', 'Не налаштовано — натисни ⚙')

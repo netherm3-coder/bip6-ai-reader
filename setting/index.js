@@ -21,7 +21,7 @@ AppSettingsPage({
       Text({ style: { fontSize: '20px', fontWeight: 'bold', color: '#111' } }, 'AI Читалка'),
       Text(
         { style: textStyle },
-        'Годинник показує відповіді Claude і Gemini, які ти надіслав зі сторінки «На годинник» на телефоні.'
+        'Годинник показує відповіді Claude і Gemini та книги, які ти надіслав зі сторінки «На годинник» на телефоні.'
       ),
 
       Text({ style: headStyle }, '1. Токен GitHub'),

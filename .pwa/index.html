@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>На годинник</title>
-<meta name="description" content="Відповіді Claude і Gemini — на годинник Amazfit Bip 6">
+<meta name="description" content="Відповіді Claude і Gemini та книги — на годинник Amazfit Bip 6">
 <meta name="theme-color" content="#0b0b0d">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -24,6 +24,7 @@
     --bad: #ff453a;
     --claude: #d97757;
     --gemini: #6c8cff;
+    --book: #2fc6a0;
     --radius: 18px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -127,6 +128,16 @@
   .msg.ok { color: var(--ok); } .msg.bad { color: #ff8a80; } .msg.warn { color: var(--warn); }
   ol { padding-left: 20px; margin: 8px 0 0; }
   ol li { margin: 6px 0; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); padding: 5px; border-radius: 16px; margin-top: 18px; }
+  .tabs button { height: 44px; border-radius: 12px; background: transparent; color: var(--muted); font-weight: 650; }
+  .tabs button[aria-pressed="true"] { background: var(--card-2); color: var(--text); }
+  .c-book { background: var(--book); }
+  label.primary { cursor: pointer; }
+  label.primary.disabled { opacity: .55; pointer-events: none; }
+  .book-card { margin-top: 14px; background: var(--card); border-radius: var(--radius); padding: 14px 16px 16px; }
+  .book-card .field:first-child { margin-top: 0; }
+  .sample { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); color: var(--muted); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+  .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
   .hidden { display: none !important; }
   @keyframes s { to { transform: rotate(360deg); } }
 </style>
@@ -160,8 +171,13 @@
   <div class="msg" id="settingsMsg"></div>
 </section>
 
+<div class="tabs" role="tablist" aria-label="Що надсилати">
+  <button type="button" id="tabAnswers" data-tab="answers" aria-pressed="true">Відповіді AI</button>
+  <button type="button" id="tabBooks" data-tab="books" aria-pressed="false">Книги</button>
+</div>
+
 <main id="main">
-  <div class="seg" role="group" aria-label="Звідки відповідь">
+  <div class="seg" id="srcSeg" role="group" aria-label="Звідки відповідь">
     <button type="button" data-src="claude" aria-pressed="true"><span class="src-dot c-claude"></span>Claude</button>
     <button type="button" data-src="gemini" aria-pressed="false"><span class="src-dot c-gemini"></span>Gemini</button>
   </div>
@@ -203,6 +219,53 @@
     </div>
   </details>
 </main>
+
+<section id="booksTab" class="hidden" aria-label="Книги">
+  <label class="primary" id="bookPick" for="bookFile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    <span>Вибрати книгу</span>
+  </label>
+  <input type="file" id="bookFile" class="file-input">
+  <p class="hint">EPUB, FB2, FB2.ZIP, TXT, DOCX або PDF із текстом. Файл перетворюється на текст тут, у браузері, і лягає у твій приватний репозиторій.</p>
+
+  <div id="bookResult" class="result hidden" role="status">
+    <div class="r-head" id="bookResultHead"></div>
+    <div class="r-title" id="bookResultBody"></div>
+  </div>
+
+  <div id="bookPreview" class="book-card hidden">
+    <div class="field">
+      <label for="bookTitle">Назва</label>
+      <input id="bookTitle" type="text" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="bookAuthor">Автор</label>
+      <input id="bookAuthor" type="text" autocomplete="off">
+    </div>
+    <p class="note" id="bookStats"></p>
+    <p class="sample" id="bookSample"></p>
+    <div class="pz-actions">
+      <button class="primary" id="bookSend" type="button">Надіслати</button>
+      <button class="secondary" id="bookCancel" type="button">Скасувати</button>
+    </div>
+  </div>
+
+  <h2 id="booksTitle">Книги для годинника</h2>
+  <div class="list" id="booksList"><div class="empty">Завантаження…</div></div>
+
+  <details>
+    <summary>Як читати на годиннику</summary>
+    <div class="details-body">
+      <ol>
+        <li>Надішли книгу звідси.</li>
+        <li>Відкрий AI Читалку на годиннику поруч із телефоном — книга скачається сама (кнопка «Книги» показує відсотки).</li>
+        <li>Коли в «Книгах» на годиннику написано «Усе скачано», телефон більше не потрібен.</li>
+        <li>На годиннику: торкнись праворуч — далі, ліворуч — назад; свайп угору чи вниз — те саме; торкнись назви вгорі — меню (зміст, шрифт, перехід).</li>
+        <li>Без телефона поруч AI Читалка відкривається одразу на книзі.</li>
+      </ol>
+    </div>
+  </details>
+</section>
 
 <script type="module" src="app.js"></script>
 </body>

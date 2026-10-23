@@ -13,7 +13,9 @@ const MESSAGES = {
   bad_data: 'Пошкоджений список на GitHub.',
   bad_id: 'Неправильний запит.',
   ble: "Немає зв'язку з телефоном.",
-  phone_timeout: 'Телефон не відповів. Zepp запущений?'
+  phone_timeout: 'Телефон не відповів. Zepp запущений?',
+  book_data: 'Книга на телефоні пошкоджена або змінилася.',
+  nospace: 'Мало місця на годиннику.'
 }
 
 export function errorMessage(code) {

@@ -1,4 +1,5 @@
-// Сервіс у застосунку Zepp на телефоні: на запит годинника забирає відповіді з GitHub.
+// Сервіс у застосунку Zepp на телефоні: на запит годинника забирає з GitHub
+// відповіді й книги (книги — частинами по 8000 символів).
 
 import { BaseSideService, settingsLib } from '@zeppos/zml/base-side'
 import { createReader, statusText } from './github'
@@ -28,8 +29,12 @@ AppSideService(
     onRequest(req, res) {
       const method = req && req.method
       let task = null
+      const params = (req && req.params) || {}
       if (method === 'list') task = reader.list()
-      else if (method === 'get') task = reader.get(req.params && req.params.id)
+      else if (method === 'get') task = reader.get(params.id)
+      else if (method === 'books') task = reader.books()
+      else if (method === 'bmeta') task = reader.bookMeta(params.id)
+      else if (method === 'bpart') task = reader.bookPart(params.id, params.i, params.p)
       if (!task) {
         res(null, { error: 'unknown_method' })
         return
