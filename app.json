@@ -5,8 +5,8 @@
     "appName": "AI Читалка",
     "appType": "app",
     "version": {
-      "code": 3,
-      "name": "1.1.1"
+      "code": 4,
+      "name": "1.1.2"
     },
     "icon": "icon.png",
     "vender": "netherm3",

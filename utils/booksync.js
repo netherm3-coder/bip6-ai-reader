@@ -6,7 +6,7 @@
 import { connectStatus } from '@zos/ble'
 import { getDiskInfo } from '@zos/device'
 import { loadLib, saveLib, mergeRemote, findBook, writePart, writeMeta, loadCfg, DEFAULT_PART } from './books'
-import { bleCode } from './messages'
+import { bleCode, transient } from './messages'
 
 const LIST_EVERY = 10 * 60 * 1000
 const RETRY_MS = 4000
@@ -102,7 +102,7 @@ function fail(me, code) {
   if (!alive(me)) return
   const st = shared()
   st.fails = (st.fails || 0) + 1
-  if (code && code !== 'ble' && code !== 'phone_timeout') {
+  if (code && !transient(code)) {
     setPhase(me, 'error', { error: code })
     schedule(me, 60000)
     return

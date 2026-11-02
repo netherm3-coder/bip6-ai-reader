@@ -15,11 +15,13 @@ import { statusBar, setProps, removeWidget, globalData, markStarted } from '../u
 import { holdScreen, refreshScreen, releaseScreen, wakeRelaunch } from '../utils/screen'
 import { lastReadable, loadCfg, setSection } from '../utils/books'
 import { startSync, stopSync, syncInfo, phoneConnected } from '../utils/booksync'
-import { errorMessage, bleCode } from '../utils/messages'
+import { errorMessage, bleCode, transient } from '../utils/messages'
 import { SOURCE_NAMES } from '../shared/config'
 
 const ROW_H = 92
 const ROW_GAP = 10
+// Через скільки повторити оновлення, якщо телефон не відповів.
+const RETRY_MS = 4000
 
 function scrollTop() {
   try {
@@ -265,8 +267,13 @@ Page(
       push({ url: 'page/view', params: JSON.stringify({ id }) })
     },
 
-    refresh() {
+    // retry — повторна спроба після обриву (Zepp на телефоні міг ще прокидатися).
+    refresh(retry) {
       if (this.loading) return
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer)
+        this.retryTimer = null
+      }
       this.refreshed = true
       if (!phoneConnected()) {
         const saved = this.idx.items.length ? ' Показано збережені.' : ''
@@ -275,7 +282,7 @@ Page(
         return
       }
       this.loading = true
-      this.setStatus('Оновлення…')
+      this.setStatus(retry ? 'Чекаю на Zepp на телефоні…' : 'Оновлення…')
       this.request({ method: 'list' }, { timeout: 25000 })
         .then((res) => {
           this.loading = false
@@ -293,8 +300,18 @@ Page(
         .catch((e) => {
           this.loading = false
           if (this.destroyed) return
+          const code = bleCode(e)
+          // Перша невдача — ще раз сам за кілька секунд, без натискань.
+          if (!retry && transient(code) && phoneConnected()) {
+            this.setStatus('Чекаю на Zepp на телефоні…')
+            this.retryTimer = setTimeout(() => {
+              this.retryTimer = null
+              if (!this.destroyed) this.refresh(true)
+            }, RETRY_MS)
+            return
+          }
           const saved = this.idx.items.length ? ' Показано збережені.' : ''
-          this.setStatus(errorMessage(bleCode(e)) + saved, COLOR.WARN)
+          this.setStatus(errorMessage(code) + saved, COLOR.WARN)
           this.startBooks()
         })
     },
@@ -331,6 +348,7 @@ Page(
 
     onDestroy() {
       this.destroyed = true
+      if (this.retryTimer) clearTimeout(this.retryTimer)
       stopSync(this)
       releaseScreen()
     }

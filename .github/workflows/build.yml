@@ -62,6 +62,7 @@ jobs:
           unzip -p device.zip app.json > app.json
           cat app.json; echo
           grep -q '"mode":"preview"' app.json
+          grep -o '"expiredTime":[0-9]*' app.json || true
 
       - name: Publish to the build branch
         env:

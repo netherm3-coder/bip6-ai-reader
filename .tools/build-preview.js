@@ -17,11 +17,42 @@ function zeusDir() {
   return null
 }
 
-const dir = zeusDir()
+// Zeus позначає пакет терміном дії 48 год (packageInfo.expiredTime = 172800 с).
+// Через ~2 доби після встановлення з QR Zepp переставав запускати сервіс програми
+// на телефоні, і годинник писав «Немає зв'язку з телефоном». Подовжуємо термін
+// до 5 років (так, щоб час закінчення вміщався в 32-бітне число).
+const LONG_EXPIRY = 5 * 365 * 24 * 3600
+
+function patchExpiry(zeus) {
+  const dirs = [path.join(zeus, 'node_modules', '@zeppos', 'zpm', 'lib'), path.join(zeus, '..', 'zpm', 'lib')]
+  let patched = 0
+  let already = 0
+  dirs.forEach((d) => {
+    let files = []
+    try {
+      files = fs.readdirSync(d).filter((f) => f.endsWith('.js'))
+    } catch (e) {
+      return
+    }
+    files.forEach((f) => {
+      const file = path.join(d, f)
+      const src = fs.readFileSync(file, 'utf8')
+      if (src.indexOf('expiredTime=' + LONG_EXPIRY) >= 0) already++
+      if (src.indexOf('expiredTime=172800') < 0) return
+      fs.writeFileSync(file, src.split('expiredTime=172800').join('expiredTime=' + LONG_EXPIRY))
+      patched++
+    })
+  })
+  return patched + already
+}
+
+const dir = process.env.ZEUS_DIR || zeusDir()
 if (!dir) {
   console.error('Zeus CLI не знайдено: npm install -g @zeppos/zeus-cli@1')
   process.exit(1)
 }
+if (patchExpiry(dir)) console.log('Термін дії preview-пакета: 5 років')
+else console.log('::warning::Не вдалося подовжити термін дії preview-пакета (змінився Zeus?) — лишається 48 год.')
 
 const project = path.resolve(__dirname, '..')
 const app = JSON.parse(fs.readFileSync(path.join(project, 'app.json'), 'utf8'))
