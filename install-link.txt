@@ -1,0 +1,1 @@
+zpkd1://raw.githubusercontent.com/netherm3-coder/bip6-ai-reader/build/bip6-ai-reader.zpk
